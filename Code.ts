@@ -7,9 +7,37 @@ TODO
  */
 
 // --------------------------------------------------------------------------------------------------------------------
+// Copy UserProps to ScriptProps --------------------------------------------------------------------------------------
+class KeyValueStore {
+  userStore = PropertiesService.getUserProperties();
+  scriptStore = PropertiesService.getScriptProperties();
+  getProperty(key: string) {
+    /*
+     If the key consists of anything other than numbers,
+     it is not stored in the script side because it is confidential information.
+     */
+    if (!key.match(/[0-9]+/)) return this.userStore.getProperty(key);
+    const userRetVal = this.userStore.getProperty(key);
+    if (userRetVal === null) {
+      console.log(`key: ${key} is null, skipped.`);
+      return userRetVal;
+    } // If null, do not store.
+    this.scriptStore.setProperty(key, userRetVal);
+    return this.scriptStore.getProperty(key);
+  }
+  setProperty(key: string, value: string) {
+    this.userStore.setProperty(key, value);
+    this.scriptStore.setProperty(key, value);
+  }
+  deleteProperty(key: string) {
+    this.userStore.deleteProperty(key);
+    this.scriptStore.deleteProperty(key);
+  }
+}
+
+// --------------------------------------------------------------------------------------------------------------------
 // Global variables for requests --------------------------------------------------------------------------------------
-const USER = PropertiesService.getUserProperties();
-const SCRIPT = PropertiesService.getScriptProperties();
+const USER = new KeyValueStore();
 const user_name = USER.getProperty('user_name');
 const personal_access_token = USER.getProperty('personal_access_token');
 const organization = USER.getProperty('organization');
