@@ -414,7 +414,8 @@ const duplicateAllProjectWorkItems = () => {
     return postToOriginal(requestUrl, requestPayload);
   })();
 
-  const ids = queriedIds.workItems.map((item: itemQueriedByWiql) => item.id);
+  const workItems: itemQueriedByWiql[] = queriedIds.workItems;
+  const ids = workItems.map((item: itemQueriedByWiql) => item.id.toString());
   console.log(`Original project's workitem count: ${ids.length}`);
 
   // Copy each WorkItem
