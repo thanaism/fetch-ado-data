@@ -267,6 +267,15 @@ const sendRequest = (
     return responseJson;
   }
 };
+const genGetRequest = (url: string) => {
+  const request: GoogleAppsScript.URL_Fetch.URLFetchRequest = {
+    url: url,
+    muteHttpExceptions: true,
+    method: 'get',
+    headers: { Authorization: `Basic ${token}` },
+  };
+  return request;
+};
 
 // --------------------------------------------------------------------------------------------------------------------
 // Duplicate Areas and Iterations -------------------------------------------------------------------------------------
@@ -376,9 +385,44 @@ interface Relation {
   attributes: object;
 }
 
-const generateJsonPatch = (originalWorkItem: WorkItem) => {
+const updateLinks = (textData: string) => {
+  const re = RegExp(
+    `(<a href=")(https://dev\.azure\.com/[^/]+/[^/]+/_workitems/edit/[0-9]+)(" data-vss-mention="version:1\.0">#)([1-9][0-9]*)(</a>&nbsp;)`,
+    'g',
+  );
+  const replaced: string = textData.replace(re, (match, ...p) => {
+    const newId: string = USER.getProperty(p[3]) ?? '1811';
+    const url = getWorkItemUrl(newId) ?? getWorkItemUrl('1811');
+    return p[0] + url + p[2] + newId + p[4];
+  });
+  return replaced;
+};
+
+const generateJsonPatch = (originalWorkItem: WorkItem, titleOnly = false) => {
   const newAreaPath = getNewClassificationPath(originalWorkItem.areaPath);
   const newIterationPath = getNewClassificationPath(originalWorkItem.iterationPath);
+  if (titleOnly) {
+    return JSON.stringify([
+      {
+        op: 'add',
+        path: '/fields/System.AreaPath',
+        from: null,
+        value: newAreaPath,
+      },
+      {
+        op: 'add',
+        path: '/fields/System.IterationPath',
+        from: null,
+        value: newIterationPath,
+      },
+      {
+        op: 'add',
+        path: '/fields/System.Title',
+        from: null,
+        value: originalWorkItem.title,
+      },
+    ]);
+  }
   const requestPayloadObject: workItemJsonPatch[] = [
     {
       op: 'add',
@@ -408,23 +452,25 @@ const generateJsonPatch = (originalWorkItem: WorkItem) => {
       op: 'add',
       path: '/fields/System.Description',
       from: null,
-      value: originalWorkItem.description ?? '',
+      value: updateLinks(originalWorkItem.description ?? ''),
     },
   ];
   if (originalWorkItem.relations != undefined) {
     const baseUrl = `https://dev.azure.com/${organization_copyto}/_apis/wit/workItems/`;
-    const relations: workItemJsonPatch[] = originalWorkItem.relations.map((item: Relation) => {
-      const counterpartId = USER.getProperty(item.url.split('/').splice(-1)[0]);
-      return {
-        op: 'add',
-        path: '/relations/-',
-        from: null,
-        value: {
-          rel: item.rel,
-          url: baseUrl + counterpartId,
-        },
-      };
-    });
+    const relations: workItemJsonPatch[] = originalWorkItem.relations
+      .filter((item: Relation) => USER.getProperty(item.url.split('/').splice(-1)[0]) != null)
+      .map((item: Relation) => {
+        const counterpartId = USER.getProperty(item.url.split('/').splice(-1)[0]);
+        return {
+          op: 'add',
+          path: '/relations/-',
+          from: null,
+          value: {
+            rel: item.rel,
+            url: baseUrl + counterpartId,
+          },
+        };
+      });
     const requestPayload = JSON.stringify(requestPayloadObject.concat(relations));
     return requestPayload;
   } else {
@@ -447,10 +493,11 @@ interface CommentResponse {
 
 const updateComments = (originalWorkItem: WorkItem) => {
   const workItemId = USER.getProperty(originalWorkItem.id);
+  const updatedCommentIds: string[] = [];
   originalWorkItem.comments.forEach((comment: commentReduced) => {
     const originalCommentId = comment.id.toString();
     if (!originalCommentId.match(/[0-9]+/)) {
-      console.log(originalCommentId);
+      console.log('Comment ID is NaN' + originalCommentId);
       throw Error;
     }
     if (propertyExists(originalCommentId)) {
@@ -458,38 +505,76 @@ const updateComments = (originalWorkItem: WorkItem) => {
       if (copiedCommentId == null) throw Error;
       const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workItems/${workItemId}/comments/${copiedCommentId}?api-version=6.0-preview.3`;
       deleteToCopied(requestUrl);
-      console.log('Deleted Comment Id: ' + copiedCommentId);
+      // console.log('Deleted Comment Id: ' + copiedCommentId);
     }
     const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workItems/${workItemId}/comments?api-version=7.1-preview.3`;
-    const payload = JSON.stringify({ text: comment.text });
+    const payload = JSON.stringify({ text: updateLinks(comment.text) });
     const response: CommentResponse = postToCopied(requestUrl, payload);
     const copiedCommentId = response.id.toString();
     USER.setProperty(originalCommentId, copiedCommentId);
-    console.log('Updated Comment ID: ' + copiedCommentId);
+    // console.log('Updated Comment ID: ' + copiedCommentId);
+    updatedCommentIds.push(copiedCommentId);
   });
+  return updatedCommentIds;
+};
+
+const getWorkItemUrl = (id: string) => {
+  try {
+    // Query WorkItems
+    const queriedWorkItem: WorkItemResponse = (() => {
+      const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/${id}?api-version=7.1-preview.3&$expand=all`;
+      return getToCopied(requestUrl);
+    })();
+    console.log('WorkItem URL: ' + queriedWorkItem._links.html.href);
+    return queriedWorkItem._links.html.href;
+  } catch {
+    console.log('!! NO URL FOUND !!');
+    return null;
+  }
 };
 
 const updateWorkItem: (arg0: string, arg1: WorkItem) => void = (copiedItemId, originalItem) => {
+  getWorkItemUrl(copiedItemId);
   const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/${copiedItemId}?api-version=6.0`;
   const requestPayload = generateJsonPatch(originalItem);
   patchToCopied(requestUrl, requestPayload);
   console.log('Updated WorkItem ID: ' + copiedItemId);
-  updateComments(originalItem);
+  const updatedCommentIds: string[] = updateComments(originalItem);
+  console.log('Updated Comment IDs: ' + updatedCommentIds);
+};
+
+type ErrorResponse = {
+  $id: string;
+  innerException: object | null;
+  message: string;
+  typeName: string;
+  typeKey: string;
+  errorCode: number;
+  eventId: number;
 };
 
 const createWorkItem: (originalWorkItem: WorkItem) => string = originalWorkItem => {
   const type = encodeURI(originalWorkItem.workItemType);
+  // console.log(type);
   const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/$${type}?api-version=6.0`;
-  const requestPayload = generateJsonPatch(originalWorkItem);
-  const response: WorkItemResponse = postToCopied(
+  const requestPayload = generateJsonPatch(originalWorkItem, true);
+  const response: WorkItemResponse | ErrorResponse = postToCopied(
     requestUrl,
     requestPayload,
     'application/json-patch+json',
   );
-  const id = (response.id * 1).toString();
-  console.log(`Newly Created Item Id: ${id}`);
-  updateComments(originalWorkItem);
-  return id;
+  // console.log(response);
+  if ('errorCode' in response) {
+    console.log(requestPayload);
+    throw Error;
+  } else {
+    const id: string = response.id.toString();
+    USER.setProperty(originalWorkItem.id, id);
+    console.log(`Newly Created Item Id: ${USER.getProperty(originalWorkItem.id)}`);
+    updateWorkItem(id, originalWorkItem);
+    // updateComments(originalWorkItem);
+    return id;
+  }
 };
 
 interface commentReduced {
@@ -514,16 +599,86 @@ const duplicateAllProjectWorkItems = () => {
     return postToOriginal(requestUrl, requestPayload);
   })();
 
-  const workItems: itemQueriedByWiql[] = queriedIds.workItems;
-  const ids = workItems.map((item: itemQueriedByWiql) => item.id.toString());
+  const workItemIds: itemQueriedByWiql[] = queriedIds.workItems;
+  const ids = workItemIds.map((item: itemQueriedByWiql) => item.id.toString());
   console.log(`Original project's workitem count: ${ids.length}`);
 
+  const workItems: WorkItem[] = genWorkItemsFromIds(ids);
+
   // Copy each WorkItem
-  ids.forEach((id: string) => {
-    console.log('Queried WorkItem ID: ' + id);
-    const workItem = generateWorkItemObjectFromId(id);
-    duplicateSingleWorkItem(workItem);
+  const skipped: string[] = [];
+  workItems.forEach((workItem: WorkItem) => {
+    const changedDate: number = Date.parse(workItem.changedDate);
+    const isChanged = changedDate > Date.parse('2018-03-26T00:00:00');
+    if (isChanged) {
+      console.log('Duplicate WorkItem: ' + workItem.id);
+      duplicateSingleWorkItem(workItem);
+    } else {
+      // console.log('Skip WorkItem: ' + workItem.id);
+      skipped.push(workItem.id);
+    }
   });
+  console.log('Skipped WorkItems: ' + skipped);
+};
+
+interface CommentsResponse {
+  totalCount: number;
+  count: number;
+  comments: comment[];
+}
+
+const genWorkItemsFromIds = (ids: string[]) => {
+  const workItemUrl = (id: string) =>
+    `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems/${id}?api-version=7.1-preview.3&$expand=all`;
+  const commentUrl = (id: string) =>
+    `https://dev.azure.com/${organization}/${project}/_apis/wit/workItems/${id}/comments?api-version=7.1-preview.3`;
+  type req = GoogleAppsScript.URL_Fetch.URLFetchRequest;
+  const requests: req[] = ids.reduce((arr: req[], id: string) => {
+    arr.push(genGetRequest(workItemUrl(id)));
+    arr.push(genGetRequest(commentUrl(id)));
+    return arr;
+  }, []);
+  const responses = UrlFetchApp.fetchAll(requests).map(res => JSON.parse(res.getContentText()));
+  const workItems: WorkItem[] = responses
+    .reduce(
+      (a, c, i) => (i % 2 == 0 ? [...a, [c]] : [...a.slice(0, -1), [...a[a.length - 1], c]]),
+      [],
+    )
+    .map((tuple: [WorkItemResponse, CommentsResponse]) => {
+      const workItemRes: WorkItemResponse = tuple[0];
+      const commentsRes: CommentsResponse = tuple[1];
+      // Reorder in ascending order since it is in descending order
+      const comments: comment[] = commentsRes.comments.reverse();
+
+      // Extract only necessary items from comment information
+      const commentsReduced: commentReduced[] = comments.map((comment: comment) => ({
+        id: comment.id,
+        createdBy: comment.createdBy.displayName,
+        createdDate: comment.createdDate,
+        text: sanitizeComment(comment.text),
+      }));
+
+      // Description of original WorkItem (including comments)
+      const fields: WorkItemFields = workItemRes.fields;
+      const workItem: WorkItem = {
+        id: workItemRes.id.toString(),
+        areaPath: fields['System.AreaPath'],
+        state: fields['System.State'],
+        iterationPath: fields['System.IterationPath'],
+        workItemType: fields['System.WorkItemType'],
+        assignedTo:
+          'System.AssignedTo' in fields ? fields['System.AssignedTo'].displayName : 'Unassigned',
+        createdDate: fields['System.CreatedDate'],
+        changedDate: fields['System.ChangedDate'],
+        createdBy: fields['System.CreatedBy'].displayName,
+        title: fields['System.Title'],
+        description: fields['System.Description'],
+        relations: workItemRes.relations ?? undefined,
+        comments: commentsReduced,
+      };
+      return workItem;
+    });
+  return workItems;
 };
 
 const generateWorkItemObjectFromId = (id: string) => {
@@ -574,18 +729,19 @@ const generateWorkItemObjectFromId = (id: string) => {
 const duplicateSingleWorkItem: (originalItem: WorkItem) => void = originalItem => {
   if (!propertyExists(originalItem.id)) {
     const copiedItemId = createWorkItem(originalItem);
-    const sanitizedId = copiedItemId.replace(/([0-9]+)\.0/, '$1');
-    USER.setProperty(originalItem.id, sanitizedId);
+    // const sanitizedId = copiedItemId.replace(/([0-9]+)\.0/, '$1');
+    USER.setProperty(originalItem.id, copiedItemId);
   } else {
     const copiedItemId = USER.getProperty(originalItem.id);
     if (copiedItemId == null) throw Error;
-    if (copiedItemId == 'NaN') {
+    if (copiedItemId == 'NaN' || getWorkItemUrl(copiedItemId) == null) {
       USER.deleteProperty(originalItem.id);
       duplicateSingleWorkItem(originalItem);
       return;
     }
-    const sanitizedId = copiedItemId.replace(/([0-9]+)\.0/, '$1');
-    USER.setProperty(originalItem.id, sanitizedId);
-    updateWorkItem(sanitizedId, originalItem);
+    // const sanitizedId = copiedItemId.replace(/([0-9]+)\.0/, '$1');
+    USER.setProperty(originalItem.id, copiedItemId);
+    // USER.setProperty(originalItem.id, sanitizedId);
+    updateWorkItem(copiedItemId, originalItem);
   }
 };
