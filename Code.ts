@@ -175,7 +175,8 @@ interface WorkItem {
   iterationPath: string;
   workItemType: string;
   assignedTo: string;
-  createdDate: string;
+  createdDate: DateLike;
+  changedDate: DateLike;
   createdBy: string;
   title: string;
   description: string;
@@ -527,8 +528,8 @@ const duplicateAllProjectWorkItems = () => {
 
 const generateWorkItemObjectFromId = (id: string) => {
   // Query WorkItems
-  const queriedWorkItems = (() => {
-    const requestUrl = `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems?ids=${id}&api-version=7.1-preview.3&$expand=all`;
+  const queriedWorkItem: WorkItemResponse = (() => {
+    const requestUrl = `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems/${id}?api-version=7.1-preview.3&$expand=all`;
     return getToOriginal(requestUrl);
   })();
 
@@ -550,7 +551,7 @@ const generateWorkItemObjectFromId = (id: string) => {
   }));
 
   // Description of original WorkItem (including comments)
-  const fields: WorkItemFields = queriedWorkItems.value[0].fields;
+  const fields: WorkItemFields = queriedWorkItem.fields;
   const workItem: WorkItem = {
     id: id,
     areaPath: fields['System.AreaPath'],
@@ -560,13 +561,13 @@ const generateWorkItemObjectFromId = (id: string) => {
     assignedTo:
       'System.AssignedTo' in fields ? fields['System.AssignedTo'].displayName : 'Unassigned',
     createdDate: fields['System.CreatedDate'],
+    changedDate: fields['System.ChangedDate'],
     createdBy: fields['System.CreatedBy'].displayName,
     title: fields['System.Title'],
     description: fields['System.Description'],
-    relations: queriedWorkItems.value[0].relations ?? undefined,
+    relations: queriedWorkItem.relations ?? undefined,
     comments: commentsReduced,
   };
-
   return workItem;
 };
 
