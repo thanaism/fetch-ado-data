@@ -58,15 +58,110 @@ const token_copyto = Utilities.base64Encode(
 
 // --------------------------------------------------------------------------------------------------------------------
 // JSON Response Type Difinition --------------------------------------------------------------------------------------
-interface workItemResponse {
-  id: number;
-  rev: number;
-  fields: object;
-  _links: object;
-  url: string;
+type MailAddress = string;
+type URL = string;
+type GUID = string;
+type IterationPath = string;
+type WorkItemType = 'Product Backlog Item' | 'Task' | 'Epic' | 'Feature';
+type State = 'Active' | 'In Progress' | 'Closed';
+
+type User = {
+  displayName: string;
+  url: URL;
+  _links: {
+    avatar: {
+      href: URL;
+    };
+  };
+  id: GUID;
+  uniqueName: MailAddress;
+  imageUrl: URL;
+  descriptor: string;
+};
+
+interface WorkItemFields {
+  'System.Id': number;
+  'System.AreaId': number;
+  'System.AreaPath': string;
+  'System.TeamProject': string;
+  'System.NodeName': string;
+  'System.AreaLevel1': string;
+  'System.Rev': number;
+  'System.AuthorizedDate': Date;
+  'System.RevisedDate': Date;
+  'System.IterationId': number;
+  'System.IterationPath': IterationPath;
+  'System.IterationLevel1': string;
+  'System.IterationLevel2': string;
+  'System.WorkItemType': WorkItemType;
+  'System.State': State;
+  'System.Reason': string;
+  'System.AssignedTo': User;
+  'System.CreatedDate': Date;
+  'System.CreatedBy': User;
+  'System.ChangedDate': Date;
+  'System.ChangedBy': User;
+  'System.AuthorizedAs': User;
+  'System.PersonId': number;
+  'System.Watermark': number;
+  'System.CommentCount': number;
+  'System.Title': string;
+  'System.BoardColumn': string;
+  'System.BoardColumnDone': boolean;
+  'Microsoft.VSTS.Common.StateChangeDate': Date;
+  'Microsoft.VSTS.Common.ClosedDate': Date;
+  'Microsoft.VSTS.Common.ClosedBy': User;
+  'Microsoft.VSTS.Common.Priority': number;
+  'Microsoft.VSTS.Common.ValueArea': string;
+  'Microsoft.VSTS.Common.BacklogPriority': number;
+  // 'WEF_8F5044CDB6F649D5BD09C4B52C8D802F_System.ExtensionMarker': boolean;
+  // 'WEF_8F5044CDB6F649D5BD09C4B52C8D802F_Kanban.Column': string;
+  // 'WEF_8F5044CDB6F649D5BD09C4B52C8D802F_Kanban.Column.Done': boolean;
+  'System.Description': string;
 }
 
-interface workItem {
+type WorkItemRelationType = 'System.LinkTypes.Hierarchy-Forward' | 'AttachedFile';
+
+type WorkItemRelation = {
+  rel: WorkItemRelationType;
+  url: URL;
+  attributes: {
+    name: string;
+    isLocked?: false;
+    authorizedDate?: Date;
+    id?: number;
+    resourceCreatedDate?: Date;
+    resourceModifiedDate?: Date;
+    revisedDate?: Date;
+    resourceSize?: number;
+  };
+};
+
+interface WorkItemResponse {
+  id: number;
+  rev: number;
+  fields: WorkItemFields;
+  relations: WorkItemRelation[];
+  _links: WorkItemLink;
+  url: URL;
+}
+
+type WorkItemLinkKey =
+  | 'self'
+  | 'workItemUpdates'
+  | 'workItemRevisions'
+  | 'workItemComments'
+  | 'html'
+  | 'workItemType'
+  | 'fields';
+
+type WorkItemLink = {
+  [key in WorkItemLinkKey]: {
+    href: URL;
+  };
+};
+
+interface WorkItem {
   id: string;
   areaPath: string;
   state: string;
@@ -273,7 +368,7 @@ interface Relation {
   attributes: object;
 }
 
-const generateJsonPatch = (originalWorkItem: workItem) => {
+const generateJsonPatch = (originalWorkItem: WorkItem) => {
   const newAreaPath = getNewClassificationPath(originalWorkItem.areaPath);
   const newIterationPath = getNewClassificationPath(originalWorkItem.iterationPath);
   const requestPayloadObject: workItemJsonPatch[] = [
@@ -342,7 +437,7 @@ interface CommentResponse {
   url: string;
 }
 
-const updateComments = (originalWorkItem: workItem) => {
+const updateComments = (originalWorkItem: WorkItem) => {
   const workItemId = USER.getProperty(originalWorkItem.id);
   originalWorkItem.comments.forEach((comment: commentReduced) => {
     const originalCommentId = comment.id.toString();
@@ -366,7 +461,7 @@ const updateComments = (originalWorkItem: workItem) => {
   });
 };
 
-const updateWorkItem: (arg0: string, arg1: workItem) => void = (copiedItemId, originalItem) => {
+const updateWorkItem: (arg0: string, arg1: WorkItem) => void = (copiedItemId, originalItem) => {
   const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/${copiedItemId}?api-version=6.0`;
   const requestPayload = generateJsonPatch(originalItem);
   patchToCopied(requestUrl, requestPayload);
@@ -374,11 +469,11 @@ const updateWorkItem: (arg0: string, arg1: workItem) => void = (copiedItemId, or
   updateComments(originalItem);
 };
 
-const createWorkItem: (originalWorkItem: workItem) => string = originalWorkItem => {
+const createWorkItem: (originalWorkItem: WorkItem) => string = originalWorkItem => {
   const type = encodeURI(originalWorkItem.workItemType);
   const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/$${type}?api-version=6.0`;
   const requestPayload = generateJsonPatch(originalWorkItem);
-  const response: workItemResponse = postToCopied(
+  const response: WorkItemResponse = postToCopied(
     requestUrl,
     requestPayload,
     'application/json-patch+json',
@@ -452,7 +547,7 @@ const generateWorkItemObjectFromId = (id: string) => {
 
   // Description of original WorkItem (including comments)
   const fields = queriedWorkItems.value[0].fields;
-  const workItem: workItem = {
+  const workItem: WorkItem = {
     id: id,
     areaPath: fields['System.AreaPath'],
     state: fields['System.State'],
@@ -471,7 +566,7 @@ const generateWorkItemObjectFromId = (id: string) => {
   return workItem;
 };
 
-const duplicateSingleWorkItem: (originalItem: workItem) => void = originalItem => {
+const duplicateSingleWorkItem: (originalItem: WorkItem) => void = originalItem => {
   if (!propertyExists(originalItem.id)) {
     const copiedItemId = createWorkItem(originalItem);
     const sanitizedId = copiedItemId.replace(/([0-9]+)\.0/, '$1');
