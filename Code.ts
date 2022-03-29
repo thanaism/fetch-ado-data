@@ -2,9 +2,15 @@
 TODO
 - Copying attachments
 - Associations between tasks (e.g., parent-child relationship between PBI and Task) -> probably done
+- Copy date of Itrations
 - Restore the original assignee, speaker, time of the statement, etc. (add information so that it can be tracked since full restoration is not possible)
 - Citing other items in comments, queried only by number, so it is necessary to change it to the ID of the copy destination.
  */
+
+const main = () => {
+  duplicateClassificationPaths();
+  duplicateAllProjectWorkItems();
+};
 
 // --------------------------------------------------------------------------------------------------------------------
 // Copy UserProps to ScriptProps --------------------------------------------------------------------------------------
@@ -500,9 +506,6 @@ interface itemQueriedByWiql {
 const sanitizeComment = (commentText: string) => commentText;
 
 const duplicateAllProjectWorkItems = () => {
-  // Replicate Areas and Iterations structure
-  duplicateClassificationPaths();
-
   // Query for WorkItem IDs that exist in the source project
   const queriedIds = (() => {
     const requestPayload = JSON.stringify({ query: 'Select [System.Id] From WorkItems' });
