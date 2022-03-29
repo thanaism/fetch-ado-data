@@ -396,8 +396,8 @@ const isAuthorized = (workItemId: string) => {
   try {
     const queriedWorkItem: WorkItemResponse = (() => {
       const id = workItemId;
-      const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/${id}?api-version=7.1-preview.3&$expand=all`;
-      return getToCopied(requestUrl);
+      const requestUrl = `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems/${id}?api-version=7.1-preview.3&$expand=all`;
+      return getToOriginal(requestUrl);
     })();
     return true;
   } catch {
@@ -466,12 +466,29 @@ const generateJsonPatch = (originalWorkItem: WorkItem, titleOnly = false) => {
       (arr: workItemJsonPatch[], item: WorkItemRelation) => {
         const itemId = item.url.split('/').splice(-1)[0];
         if (item.rel == 'AttachedFile') {
+          if (
+            item.attributes.id != null &&
+            USER.getProperty(item.attributes.id.toString()) != null
+          ) {
+            console.log('Attachment Already Exists: ' + item.attributes.name);
+            return arr;
+          }
           type UploadResponse = { id: string; url: string };
           const uploadResponse: UploadResponse = attachmentDownloadAndUpload(
             itemId,
-            encodeURI(item.attributes.name),
+            encodeURIComponent(item.attributes.name),
           );
+          if (uploadResponse.url == null) {
+            console.log('!! Uploading Failed !!');
+            console.log(uploadResponse);
+            throw Error;
+          }
           console.log('File Uploaded: ' + uploadResponse.url);
+          if (item.attributes.id != null) {
+            USER.setProperty(item.attributes.id.toString(), uploadResponse.url);
+          } else {
+            throw Error;
+          }
           const obj: workItemJsonPatch = {
             op: 'add',
             path: '/relations/-',
@@ -517,9 +534,18 @@ const generateJsonPatch = (originalWorkItem: WorkItem, titleOnly = false) => {
 const attachmentDownloadAndUpload = (itemId: string, encodedFilename: string) => {
   const getUrl: string = `https://dev.azure.com/${organization}/${project}/_apis/wit/attachments/${itemId}?api-version=6.0`;
   const response = UrlFetchApp.fetchAll([genGetRequest(getUrl)])[0];
+  if (response == null) {
+    console.log(getUrl);
+    console.log('!! Download Failed !!');
+  }
   const data = response.getBlob();
   const postUrl: string = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/attachments?fileName=${encodedFilename}&api-version=6.0`;
   const postRes = sendRequest('copied', 'post', postUrl, data, 'application/octet-stream');
+  if (postRes.id == null) {
+    console.log('!! Upload Failed !!');
+    console.log(encodedFilename);
+    console.log(postUrl);
+  }
   return postRes;
 };
 
@@ -779,3 +805,52 @@ const duplicateSingleWorkItem: (originalItem: WorkItem) => void = originalItem =
     updateWorkItem(copiedItemId, originalItem);
   }
 };
+
+// !! Function to register attachments after the fact,
+//    since the policy was to store them in KVS to avoid duplicate uploads of attached items,
+//    but registration was not done at the time of implementation.
+function registerAttachedItemId() {
+  // Query for WorkItem IDs that exist in the source project
+  const queriedIds = (() => {
+    const requestPayload = JSON.stringify({ query: 'Select [System.Id] From WorkItems' });
+    const requestUrl = `https://dev.azure.com/${organization}/${project}/${team}/_apis/wit/wiql?api-version=7.1-preview.2`;
+    return postToOriginal(requestUrl, requestPayload);
+  })();
+
+  const workItemIds: itemQueriedByWiql[] = queriedIds.workItems;
+  const ids = workItemIds.map((item: itemQueriedByWiql) => item.id.toString());
+  console.log(`Original project's workitem count: ${ids.length}`);
+
+  const workItems: WorkItem[] = genWorkItemsFromIds(ids);
+
+  // Copy each WorkItem
+  workItems.forEach((workItem: WorkItem) => {
+    if (workItem.relations != null) {
+      workItem.relations.forEach(relation => {
+        if (relation.rel == 'AttachedFile') {
+          const counterpartId = USER.getProperty(workItem.id);
+          if (counterpartId != null) {
+            const pairWorkItem: WorkItemResponse = (() => {
+              const id = counterpartId;
+              const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/${id}?api-version=7.1-preview.3&$expand=all`;
+              return getToCopied(requestUrl);
+            })();
+            console.log(
+              `WorkItem ID: ${workItem.id}, FileName: ${relation.attributes.name}, Counterpart: ${pairWorkItem.id}`,
+            );
+            const pairRelation = pairWorkItem.relations.filter(
+              rel => rel.attributes.name == relation.attributes.name,
+            )[0];
+            if (pairRelation != null) {
+              const pairUrl = pairRelation.url;
+              if (relation.attributes.id != null) {
+                USER.setProperty(relation.attributes.id.toString(), pairUrl);
+                console.log(relation.attributes.id.toString() + ' -> ' + pairUrl);
+              }
+            }
+          }
+        }
+      });
+    }
+  });
+}
