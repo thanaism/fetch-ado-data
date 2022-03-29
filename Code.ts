@@ -1,10 +1,8 @@
 /*
 TODO
 - Copying attachments
-- Associations between tasks (e.g., parent-child relationship between PBI and Task) -> probably done
 - Copy date of Itrations
 - Restore the original assignee, speaker, time of the statement, etc. (add information so that it can be tracked since full restoration is not possible)
-- Citing other items in comments, queried only by number, so it is necessary to change it to the ID of the copy destination.
  */
 
 const main = () => {
@@ -505,14 +503,12 @@ const updateComments = (originalWorkItem: WorkItem) => {
       if (copiedCommentId == null) throw Error;
       const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workItems/${workItemId}/comments/${copiedCommentId}?api-version=6.0-preview.3`;
       deleteToCopied(requestUrl);
-      // console.log('Deleted Comment Id: ' + copiedCommentId);
     }
     const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workItems/${workItemId}/comments?api-version=7.1-preview.3`;
     const payload = JSON.stringify({ text: updateLinks(comment.text) });
     const response: CommentResponse = postToCopied(requestUrl, payload);
     const copiedCommentId = response.id.toString();
     USER.setProperty(originalCommentId, copiedCommentId);
-    // console.log('Updated Comment ID: ' + copiedCommentId);
     updatedCommentIds.push(copiedCommentId);
   });
   return updatedCommentIds;
@@ -555,7 +551,6 @@ type ErrorResponse = {
 
 const createWorkItem: (originalWorkItem: WorkItem) => string = originalWorkItem => {
   const type = encodeURI(originalWorkItem.workItemType);
-  // console.log(type);
   const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/$${type}?api-version=6.0`;
   const requestPayload = generateJsonPatch(originalWorkItem, true);
   const response: WorkItemResponse | ErrorResponse = postToCopied(
@@ -563,7 +558,6 @@ const createWorkItem: (originalWorkItem: WorkItem) => string = originalWorkItem 
     requestPayload,
     'application/json-patch+json',
   );
-  // console.log(response);
   if ('errorCode' in response) {
     console.log(requestPayload);
     throw Error;
@@ -572,7 +566,6 @@ const createWorkItem: (originalWorkItem: WorkItem) => string = originalWorkItem 
     USER.setProperty(originalWorkItem.id, id);
     console.log(`Newly Created Item Id: ${USER.getProperty(originalWorkItem.id)}`);
     updateWorkItem(id, originalWorkItem);
-    // updateComments(originalWorkItem);
     return id;
   }
 };
@@ -614,7 +607,6 @@ const duplicateAllProjectWorkItems = () => {
       console.log('Duplicate WorkItem: ' + workItem.id);
       duplicateSingleWorkItem(workItem);
     } else {
-      // console.log('Skip WorkItem: ' + workItem.id);
       skipped.push(workItem.id);
     }
   });
@@ -729,7 +721,6 @@ const generateWorkItemObjectFromId = (id: string) => {
 const duplicateSingleWorkItem: (originalItem: WorkItem) => void = originalItem => {
   if (!propertyExists(originalItem.id)) {
     const copiedItemId = createWorkItem(originalItem);
-    // const sanitizedId = copiedItemId.replace(/([0-9]+)\.0/, '$1');
     USER.setProperty(originalItem.id, copiedItemId);
   } else {
     const copiedItemId = USER.getProperty(originalItem.id);
@@ -739,9 +730,7 @@ const duplicateSingleWorkItem: (originalItem: WorkItem) => void = originalItem =
       duplicateSingleWorkItem(originalItem);
       return;
     }
-    // const sanitizedId = copiedItemId.replace(/([0-9]+)\.0/, '$1');
     USER.setProperty(originalItem.id, copiedItemId);
-    // USER.setProperty(originalItem.id, sanitizedId);
     updateWorkItem(copiedItemId, originalItem);
   }
 };
