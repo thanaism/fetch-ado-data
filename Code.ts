@@ -380,14 +380,34 @@ interface workItemJsonPatch {
 }
 
 const updateLinks = (textData: string) => {
-  const re = RegExp(
-    `(<a href=")(https://dev\.azure\.com/[^/]+/[^/]+/_workitems/edit/[0-9]+)(" data-vss-mention="version:1\.0">#)([1-9][0-9]*)(</a>&nbsp;)`,
+  const re1 = RegExp(
+    `(<a[^>]*href=")(https://dev\.azure\.com/[^/]+/[^/]+/_workitems/edit/[0-9]+)("[^>]* data-vss-mention="version:1\.0"[^>]*>#)([1-9][0-9]*)(</a>)`,
     'g',
   );
-  const replaced: string = textData.replace(re, (match, ...p) => {
+  const replaced1: string = textData.replace(re1, (match, ...p) => {
     const newId: string = USER.getProperty(p[3]) ?? UNAUTHORIZED;
     const url = getWorkItemUrl(newId) ?? getWorkItemUrl(UNAUTHORIZED);
     return p[0] + url + p[2] + newId + p[4];
+  });
+  const re2 = RegExp(
+    `(<img[^>]*src=")(https://dev\.azure\.com/[^/]+/[^/]+/_apis/wit/attachments/)([^?]+)(\\?fileName=image\.png)("[^>]*>)`,
+    'g',
+  );
+  const replaced: string = replaced1.replace(re2, (match, ...p) => {
+    const imgId: string = p[2];
+    const newUrl: string | null = USER.getProperty(imgId);
+    if (newUrl != null) {
+      console.log('Image Already Exists: ' + newUrl);
+      return p[0] + newUrl + p[4];
+    }
+    const resp: { id: string; url: string } = attachmentDownloadAndUpload(
+      imgId,
+      encodeURIComponent('image.png'),
+    );
+    const url: string = resp.url;
+    USER.setProperty(imgId, url);
+    console.log('Image Uploaded: ' + url);
+    return p[0] + url + p[4];
   });
   return replaced;
 };
