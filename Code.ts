@@ -79,6 +79,7 @@ type User = {
   descriptor: string;
 };
 
+type DateLike = string;
 interface WorkItemFields {
   'System.Id': number;
   'System.AreaId': number;
@@ -87,8 +88,8 @@ interface WorkItemFields {
   'System.NodeName': string;
   'System.AreaLevel1': string;
   'System.Rev': number;
-  'System.AuthorizedDate': Date;
-  'System.RevisedDate': Date;
+  'System.AuthorizedDate': DateLike;
+  'System.RevisedDate': DateLike;
   'System.IterationId': number;
   'System.IterationPath': IterationPath;
   'System.IterationLevel1': string;
@@ -97,9 +98,9 @@ interface WorkItemFields {
   'System.State': State;
   'System.Reason': string;
   'System.AssignedTo': User;
-  'System.CreatedDate': Date;
+  'System.CreatedDate': DateLike;
   'System.CreatedBy': User;
-  'System.ChangedDate': Date;
+  'System.ChangedDate': DateLike;
   'System.ChangedBy': User;
   'System.AuthorizedAs': User;
   'System.PersonId': number;
@@ -108,8 +109,8 @@ interface WorkItemFields {
   'System.Title': string;
   'System.BoardColumn': string;
   'System.BoardColumnDone': boolean;
-  'Microsoft.VSTS.Common.StateChangeDate': Date;
-  'Microsoft.VSTS.Common.ClosedDate': Date;
+  'Microsoft.VSTS.Common.StateChangeDate': DateLike;
+  'Microsoft.VSTS.Common.ClosedDate': DateLike;
   'Microsoft.VSTS.Common.ClosedBy': User;
   'Microsoft.VSTS.Common.Priority': number;
   'Microsoft.VSTS.Common.ValueArea': string;
@@ -128,11 +129,11 @@ type WorkItemRelation = {
   attributes: {
     name: string;
     isLocked?: false;
-    authorizedDate?: Date;
+    authorizedDate?: DateLike;
     id?: number;
-    resourceCreatedDate?: Date;
-    resourceModifiedDate?: Date;
-    revisedDate?: Date;
+    resourceCreatedDate?: DateLike;
+    resourceModifiedDate?: DateLike;
+    revisedDate?: DateLike;
     resourceSize?: number;
   };
 };
@@ -546,7 +547,7 @@ const generateWorkItemObjectFromId = (id: string) => {
   }));
 
   // Description of original WorkItem (including comments)
-  const fields = queriedWorkItems.value[0].fields;
+  const fields: WorkItemFields = queriedWorkItems.value[0].fields;
   const workItem: WorkItem = {
     id: id,
     areaPath: fields['System.AreaPath'],
