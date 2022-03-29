@@ -1,6 +1,6 @@
 /*
 TODO
-- Copying attachments
+- Copying attachments -> Done.
 - Copy date of Itrations
 - Restore the original assignee, speaker, time of the statement, etc. (add information so that it can be tracked since full restoration is not possible)
  */
@@ -42,6 +42,7 @@ class KeyValueStore {
 // --------------------------------------------------------------------------------------------------------------------
 // Global variables for requests --------------------------------------------------------------------------------------
 const USER = new KeyValueStore();
+const UNAUTHORIZED = '1811'; // dummy id for unauthorized items
 const user_name = USER.getProperty('user_name');
 const personal_access_token = USER.getProperty('personal_access_token');
 const organization = USER.getProperty('organization');
@@ -178,7 +179,7 @@ interface WorkItem {
   createdBy: string;
   title: string;
   description: string;
-  relations: Relation[] | undefined;
+  relations: WorkItemRelation[] | undefined;
   comments: commentReduced[];
 }
 
@@ -246,8 +247,9 @@ const sendRequest = (
   destination: 'copied' | 'original',
   method: 'post' | 'get' | 'patch' | 'delete',
   requestUrl: string,
-  payload: string | undefined,
+  payload: string | object | undefined,
   contentType: string,
+  body = null,
 ) => {
   const isDestinationOriginal = destination == 'original';
   const requestOptions: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {
@@ -377,23 +379,30 @@ interface workItemJsonPatch {
   value: string | object;
 }
 
-interface Relation {
-  rel: string;
-  url: string;
-  attributes: object;
-}
-
 const updateLinks = (textData: string) => {
   const re = RegExp(
     `(<a href=")(https://dev\.azure\.com/[^/]+/[^/]+/_workitems/edit/[0-9]+)(" data-vss-mention="version:1\.0">#)([1-9][0-9]*)(</a>&nbsp;)`,
     'g',
   );
   const replaced: string = textData.replace(re, (match, ...p) => {
-    const newId: string = USER.getProperty(p[3]) ?? '1811';
-    const url = getWorkItemUrl(newId) ?? getWorkItemUrl('1811');
+    const newId: string = USER.getProperty(p[3]) ?? UNAUTHORIZED;
+    const url = getWorkItemUrl(newId) ?? getWorkItemUrl(UNAUTHORIZED);
     return p[0] + url + p[2] + newId + p[4];
   });
   return replaced;
+};
+
+const isAuthorized = (workItemId: string) => {
+  try {
+    const queriedWorkItem: WorkItemResponse = (() => {
+      const id = workItemId;
+      const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/${id}?api-version=7.1-preview.3&$expand=all`;
+      return getToCopied(requestUrl);
+    })();
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const generateJsonPatch = (originalWorkItem: WorkItem, titleOnly = false) => {
@@ -421,6 +430,7 @@ const generateJsonPatch = (originalWorkItem: WorkItem, titleOnly = false) => {
       },
     ]);
   }
+  const baseUrl = `https://dev.azure.com/${organization_copyto}/_apis/wit/workItems/`;
   const requestPayloadObject: workItemJsonPatch[] = [
     {
       op: 'add',
@@ -452,14 +462,40 @@ const generateJsonPatch = (originalWorkItem: WorkItem, titleOnly = false) => {
       from: null,
       value: updateLinks(originalWorkItem.description ?? ''),
     },
-  ];
-  if (originalWorkItem.relations != undefined) {
-    const baseUrl = `https://dev.azure.com/${organization_copyto}/_apis/wit/workItems/`;
-    const relations: workItemJsonPatch[] = originalWorkItem.relations
-      .filter((item: Relation) => USER.getProperty(item.url.split('/').splice(-1)[0]) != null)
-      .map((item: Relation) => {
-        const counterpartId = USER.getProperty(item.url.split('/').splice(-1)[0]);
-        return {
+    ...(originalWorkItem.relations ?? []).reduce(
+      (arr: workItemJsonPatch[], item: WorkItemRelation) => {
+        const itemId = item.url.split('/').splice(-1)[0];
+        if (item.rel == 'AttachedFile') {
+          type UploadResponse = { id: string; url: string };
+          const uploadResponse: UploadResponse = attachmentDownloadAndUpload(
+            itemId,
+            encodeURI(item.attributes.name),
+          );
+          console.log('File Uploaded: ' + uploadResponse.url);
+          const obj: workItemJsonPatch = {
+            op: 'add',
+            path: '/relations/-',
+            from: null,
+            value: {
+              rel: item.rel,
+              url: uploadResponse.url,
+              attributes: {
+                name: item.attributes.name,
+              },
+            },
+          };
+          arr.push(obj);
+          return arr;
+        }
+        // Skip items without read permission in the source project
+        const counterpartId = !isAuthorized(itemId) ? UNAUTHORIZED : USER.getProperty(itemId);
+        if (counterpartId == null) {
+          // TODO: If newly created items refer to each other, it seems to fall into an infinite loop.
+          // const newWorkItem:WorkItem = generateWorkItemObjectFromId(itemId);
+          // counterpartId = createWorkItem(newWorkItem)
+          return arr;
+        }
+        const obj: workItemJsonPatch = {
           op: 'add',
           path: '/relations/-',
           from: null,
@@ -468,13 +504,23 @@ const generateJsonPatch = (originalWorkItem: WorkItem, titleOnly = false) => {
             url: baseUrl + counterpartId,
           },
         };
-      });
-    const requestPayload = JSON.stringify(requestPayloadObject.concat(relations));
-    return requestPayload;
-  } else {
-    const requestPayload = JSON.stringify(requestPayloadObject);
-    return requestPayload;
-  }
+        arr.push(obj);
+        return arr;
+      },
+      [],
+    ),
+  ];
+  const requestPayload = JSON.stringify(requestPayloadObject);
+  return requestPayload;
+};
+
+const attachmentDownloadAndUpload = (itemId: string, encodedFilename: string) => {
+  const getUrl: string = `https://dev.azure.com/${organization}/${project}/_apis/wit/attachments/${itemId}?api-version=6.0`;
+  const response = UrlFetchApp.fetchAll([genGetRequest(getUrl)])[0];
+  const data = response.getBlob();
+  const postUrl: string = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/attachments?fileName=${encodedFilename}&api-version=6.0`;
+  const postRes = sendRequest('copied', 'post', postUrl, data, 'application/octet-stream');
+  return postRes;
 };
 
 interface CommentResponse {
@@ -521,7 +567,6 @@ const getWorkItemUrl = (id: string) => {
       const requestUrl = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/workitems/${id}?api-version=7.1-preview.3&$expand=all`;
       return getToCopied(requestUrl);
     })();
-    console.log('WorkItem URL: ' + queriedWorkItem._links.html.href);
     return queriedWorkItem._links.html.href;
   } catch {
     console.log('!! NO URL FOUND !!');
@@ -536,7 +581,7 @@ const updateWorkItem: (arg0: string, arg1: WorkItem) => void = (copiedItemId, or
   patchToCopied(requestUrl, requestPayload);
   console.log('Updated WorkItem ID: ' + copiedItemId);
   const updatedCommentIds: string[] = updateComments(originalItem);
-  console.log('Updated Comment IDs: ' + updatedCommentIds);
+  if (updatedCommentIds.length > 0) console.log('Updated Comment IDs: ' + updatedCommentIds);
 };
 
 type ErrorResponse = {
