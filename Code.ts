@@ -305,12 +305,12 @@ const duplicateClassificationPaths = () => {
   const copiedResponse: RootClassificationPath = getToCopied(requestUrl('copied'));
 
   // Duplicate under Copied in the destination project
-  const originalRootArea = originalResponse.value[0];
-  const originalRootIteration = originalResponse.value[1];
-  const copiedRootArea = copiedResponse.value[0].children?.find(
+  const originalRootArea = originalResponse.value[0] as ClassificationPath;
+  const originalRootIteration = originalResponse.value[1] as ClassificationPath;
+  const copiedRootArea = copiedResponse.value[0]?.children?.find(
     element => element.name == 'Copied',
   );
-  const copiedRootIteration = copiedResponse.value[1].children?.find(
+  const copiedRootIteration = copiedResponse.value[1]?.children?.find(
     element => element.name == 'Copied',
   );
   const getSanitizedRootPath = (rootPath: string) =>
@@ -354,7 +354,7 @@ const createClassificationPath = (
   // Request Parameter Creation
   const requestUrl = encodeURI(
     `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/` +
-      `classificationnodes/${structureGroup}/${newClassificationPathRoot}?api-version=5.0`,
+    `classificationnodes/${structureGroup}/${newClassificationPathRoot}?api-version=5.0`,
   );
   const requestPayload = JSON.stringify({ name: newClassificationPathBaseName });
 
@@ -484,7 +484,7 @@ const generateJsonPatch = (originalWorkItem: WorkItem, titleOnly = false) => {
     },
     ...(originalWorkItem.relations ?? []).reduce(
       (arr: workItemJsonPatch[], item: WorkItemRelation) => {
-        const itemId = item.url.split('/').splice(-1)[0];
+        const itemId = item.url.split('/').splice(-1)[0] as string;
         if (item.rel == 'AttachedFile') {
           if (
             item.attributes.id != null &&
@@ -558,7 +558,7 @@ const attachmentDownloadAndUpload = (itemId: string, encodedFilename: string) =>
     console.log(getUrl);
     console.log('!! Download Failed !!');
   }
-  const data = response.getBlob();
+  const data = response?.getBlob();
   const postUrl: string = `https://dev.azure.com/${organization_copyto}/${project_copyto}/_apis/wit/attachments?fileName=${encodedFilename}&api-version=6.0`;
   const postRes = sendRequest('copied', 'post', postUrl, data, 'application/octet-stream');
   if (postRes.id == null) {
