@@ -1,10 +1,10 @@
 {
   "azureFunctions.deploySubpath": ".",
-  "azureFunctions.postDeployTask": "npm install (functions)",
+  "azureFunctions.postDeployTask": "yarn install (functions)",
   "azureFunctions.projectLanguage": "TypeScript",
   "azureFunctions.projectRuntime": "~4",
   "debug.internalConsoleOptions": "neverOpen",
-  "azureFunctions.preDeployTask": "npm prune (functions)",
+  "azureFunctions.preDeployTask": "yarn install (functions)",
   "editor.rulers": [100],
   "editor.tabSize": 2,
   "files.insertFinalNewline": true,
