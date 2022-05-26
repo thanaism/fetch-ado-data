@@ -9,6 +9,7 @@ export class AzureTables {
     this.tableClient = TableClient.fromConnectionString(
       process.env.AzureStorageConnectionString!,
       process.env.TableName!,
+      { allowInsecureConnection: process.env.NODE_ENV !== 'production' },
     );
   }
 
@@ -16,6 +17,7 @@ export class AzureTables {
     if (this.azureTables == null) {
       const tableServiceClient = TableServiceClient.fromConnectionString(
         process.env.AzureStorageConnectionString!,
+        { allowInsecureConnection: process.env.NODE_ENV !== 'production' },
       );
       await tableServiceClient.createTable(process.env.TableName!);
       this.azureTables = new AzureTables();

@@ -17,10 +17,10 @@ const httpTrigger: AzureFunction = async (context: Context, req: HttpRequest): P
 
   try {
     EnvironmentVariables.instance;
+    const memo = await Memo.build();
     await duplicateClassificationNodes();
     await duplicateWorkItems();
     logger.warn(`Duplication succeeded. Sync HashMap to AzureTables...`);
-    const memo = await Memo.build();
     await memo.sync();
     const responseMessage = 'yes';
     context.res = { status: 200, body: responseMessage };

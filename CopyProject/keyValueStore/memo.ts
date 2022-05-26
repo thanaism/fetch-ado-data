@@ -21,6 +21,7 @@ export class Memo {
         this.memo.map.set(String([partitionKey, rowKey]), entity);
       }
     }
+    await this.memo.azureTables.upsertEntity('test', 'test', { value: 'test' });
     return this.memo;
   }
 
