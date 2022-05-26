@@ -95,7 +95,7 @@ export const toJsonPatchForUpdate = async (
       : await relationsJsonPatch(sourceWorkItem.relations, destinationWorkItems)),
   ];
 
-  logger.debug(JSON.stringify(jsonPatch));
+  logger.trace(JSON.stringify(jsonPatch));
   return jsonPatch;
 };
 
@@ -105,7 +105,7 @@ const convertClassificationPath = (sourceClassificationPath: string) => {
   const newClassificationPath = [env.DestinationProject, env.DestinationTeam]
     .concat(sourceClassificationPathArray)
     .join('\\');
-  logger.debug(
+  logger.trace(
     `convertClassificationPath: ${sourceClassificationPath} -> ${newClassificationPath}`,
   );
   return newClassificationPath;
@@ -139,7 +139,7 @@ const relationsJsonPatch = async (
     ),
   );
 
-  logger.debug(JSON.stringify(attachmentsExistingInDestinationWorkItems));
+  logger.trace(JSON.stringify(attachmentsExistingInDestinationWorkItems));
 
   const attachments = relations.flatMap((relation) => {
     if (relation.rel !== 'AttachedFile') return [];
@@ -186,7 +186,7 @@ const relationsJsonPatch = async (
   });
 
   const combinedJsonPatch = [...attachments, ...others];
-  logger.debug(`Combined JsonPatch: ${combinedJsonPatch.length}`);
+  logger.trace(`Combined JsonPatch: ${combinedJsonPatch.length}`);
   return combinedJsonPatch;
 };
 

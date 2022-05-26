@@ -31,12 +31,12 @@ export class Memo {
     return this.map.has(String([partitionKey, rowKey]));
   }
   public get(partitionKey: PartitionKey, rowKey: string | number) {
-    logger.debug(`Memo.get --- ${partitionKey}, ${rowKey}`);
+    logger.trace(`Memo.get --- ${partitionKey}, ${rowKey}`);
     return this.map.get(String([partitionKey, rowKey])).value;
   }
 
   public upsert(partitionKey: PartitionKey, rowKey: string | number, value: unknown) {
-    logger.debug(`Memo.upsert --- ${partitionKey}, ${rowKey}, ${String(value)}`);
+    logger.trace(`Memo.upsert --- ${partitionKey}, ${rowKey}, ${String(value)}`);
     this.map.set(String([partitionKey, rowKey]), { value });
   }
 

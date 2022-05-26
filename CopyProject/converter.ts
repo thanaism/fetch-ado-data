@@ -36,7 +36,7 @@ export const convertLinks = async (content: string): Promise<string> => {
     return [p[0], url, p[2], counterpartId, p[4]].join('');
   });
 
-  logger.debug(`contentWorkItemReplaced:\n${contentWorkItemReplaced}`);
+  logger.trace(`contentWorkItemReplaced:\n${contentWorkItemReplaced}`);
 
   const regExpAttachment = RegExp(
     `(<img[^>]*src=")` + // 0
@@ -54,11 +54,11 @@ export const convertLinks = async (content: string): Promise<string> => {
     return contentWorkItemReplaced;
   }
 
-  logger.debug(`matches:\n\t${JSON.stringify(matches)}`);
+  logger.trace(`matches:\n\t${JSON.stringify(matches)}`);
 
   for (const match of matches) {
     const sourceAttachmentId = match[3];
-    logger.debug(`sourceAttachmentId: ${sourceAttachmentId}`);
+    logger.trace(`sourceAttachmentId: ${sourceAttachmentId}`);
 
     const alreadyDupulicated = memo.has('counterpartUrl', sourceAttachmentId);
 
@@ -77,15 +77,15 @@ export const convertLinks = async (content: string): Promise<string> => {
   const contentFullyReplaced: string = contentWorkItemReplaced.replace(
     regExpAttachment,
     (_, ...p) => {
-      logger.debug(`p[2]: ${String(p[2])}`);
-      logger.debug(`p[3]: ${String(p[3])}`);
+      logger.trace(`p[2]: ${String(p[2])}`);
+      logger.trace(`p[3]: ${String(p[3])}`);
       const sourceAttachmentId = p[2] as string;
       const duplicatedImageUrl = memo.get('counterpartUrl', sourceAttachmentId);
       return [p[0], duplicatedImageUrl, p[4]].join('');
     },
   );
 
-  logger.debug(`contentFullyReplaced:\n${contentFullyReplaced}`);
+  logger.trace(`contentFullyReplaced:\n${contentFullyReplaced}`);
 
   return contentFullyReplaced;
 };

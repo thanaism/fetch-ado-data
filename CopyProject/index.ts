@@ -9,11 +9,11 @@ import { getLogger } from 'log4js';
 import { AxiosError } from 'axios';
 
 const logger = getLogger();
-logger.level = process.env.NODE_ENV !== 'production' ? 'debug' : 'error';
+logger.level = process.env.NODE_ENV !== 'production' ? 'debug' : 'info';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const httpTrigger: AzureFunction = async (context: Context, req: HttpRequest): Promise<void> => {
-  logger.debug('HTTP trigger function processed a request.');
+  logger.info('HTTP trigger function processed a request.');
 
   try {
     EnvironmentVariables.instance;
@@ -41,9 +41,9 @@ const httpTrigger: AzureFunction = async (context: Context, req: HttpRequest): P
     const memo = await Memo.build();
     await duplicateClassificationNodes();
     await duplicateWorkItems();
-    logger.warn(`Duplication succeeded. Sync HashMap to AzureTables...`);
+    logger.info(`Duplication succeeded. Sync HashMap to AzureTables...`);
     await memo.sync();
-    const responseMessage = 'yes';
+    const responseMessage = 'Your Project has been Copied!';
     context.res = { status: 200, body: responseMessage };
   } catch (e: unknown) {
     logger.warn(`Duplication failed. Sync HashMap to AzureTables...`);
