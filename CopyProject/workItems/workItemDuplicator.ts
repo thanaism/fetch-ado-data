@@ -11,7 +11,7 @@ export const duplicateWorkItems = async () => {
   const sourceWorkItemIds = await SourceWorkItem.ids();
   const sourceWorkItems = await SourceWorkItem.list(sourceWorkItemIds);
 
-  console.info(`Original project's workitem count: ${sourceWorkItemIds.length}`);
+  logger.debug(`Original project's workitem count: ${sourceWorkItemIds.length}`);
 
   for (const sourceWorkItem of sourceWorkItems) {
     await createWorkItemIfNotExists(sourceWorkItem);
@@ -65,7 +65,7 @@ const updateWorkItem = async (
   const counterpartId = memo.get('counterpartId', sourceWorkItem.id) as number;
   const previousChangedDate = memo.get('previousChangedDate', sourceWorkItem.id);
 
-  console.info(`Update WorkItem: ${sourceWorkItem.id}`);
+  logger.debug(`Update WorkItem: ${sourceWorkItem.id}`);
 
   if (counterpartId == null || previousChangedDate == null) throw Error;
 

@@ -17,6 +17,27 @@ const httpTrigger: AzureFunction = async (context: Context, req: HttpRequest): P
 
   try {
     EnvironmentVariables.instance;
+  } catch (e: unknown) {
+    logger.error(`Failed while setting environment variables`);
+    if (e instanceof Error) {
+      logger.error(e.message);
+      context.res = { status: HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR, body: e.message };
+      context.done();
+    }
+  }
+
+  try {
+    await Memo.build();
+  } catch (e: unknown) {
+    logger.error(`Failed while building key value store`);
+    if (e instanceof Error) {
+      logger.error(e.message);
+      context.res = { status: HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR, body: e.message };
+      context.done();
+    }
+  }
+
+  try {
     const memo = await Memo.build();
     await duplicateClassificationNodes();
     await duplicateWorkItems();
@@ -25,6 +46,9 @@ const httpTrigger: AzureFunction = async (context: Context, req: HttpRequest): P
     const responseMessage = 'yes';
     context.res = { status: 200, body: responseMessage };
   } catch (e: unknown) {
+    logger.warn(`Duplication failed. Sync HashMap to AzureTables...`);
+    const memo = await Memo.build();
+    await memo.sync();
     if (e instanceof Error) {
       logger.error(e.message);
       context.res = { status: HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR, body: e.message };

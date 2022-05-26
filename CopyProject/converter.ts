@@ -2,6 +2,9 @@ import { attachmentDownloadAndUpload } from './attachments/attachmentDuplicator'
 import { Memo } from './keyValueStore/memo';
 import { destinationProfile } from './environment/profile';
 import { DestinationWorkItem } from './workItems/workItemAPI';
+import { getLogger } from 'log4js';
+
+const logger = getLogger();
 
 export const addMetadata = (content: string, author: string, createdDate: string): string => {
   return (
@@ -15,7 +18,7 @@ export const addMetadata = (content: string, author: string, createdDate: string
 };
 
 export const convertLinks = async (content: string): Promise<string> => {
-  console.info(`convertLinks:`);
+  logger.debug(`convertLinks ---`);
   const regExpWorkItem = RegExp(
     `(<a[^>]*href=")` + // 0
       `(https://dev\.azure\.com/[^/]+/[^/]+/_workitems/edit/[0-9]+)` + // 1
@@ -33,24 +36,29 @@ export const convertLinks = async (content: string): Promise<string> => {
     return [p[0], url, p[2], counterpartId, p[4]].join('');
   });
 
-  console.info(`\t${contentWorkItemReplaced}`);
+  logger.debug(`contentWorkItemReplaced:\n${contentWorkItemReplaced}`);
 
   const regExpAttachment = RegExp(
     `(<img[^>]*src=")` + // 0
       `(https://dev\.azure\.com/[^/]+/[^/]+/_apis/wit/attachments/)` + // 1
       `([^?]+)` + // 2
-      `(\\?fileName=image\.png)` + // 3
+      `(\\?fileName=[^"]*)` + // 3
       `("[^>]*>)`, // 4
     'g',
   );
+
   const matches = [...contentWorkItemReplaced.matchAll(regExpAttachment)];
+
   if (matches.length === 0) {
-    console.info(`\tNo attachments included.`);
+    logger.debug(`No attachments included.`);
     return contentWorkItemReplaced;
   }
+
+  logger.debug(`matches:\n\t${JSON.stringify(matches)}`);
+
   for (const match of matches) {
     const sourceAttachmentId = match[3];
-    console.info(`\t${sourceAttachmentId}`);
+    logger.debug(`sourceAttachmentId: ${sourceAttachmentId}`);
 
     const alreadyDupulicated = memo.has('counterpartUrl', sourceAttachmentId);
 
@@ -60,20 +68,24 @@ export const convertLinks = async (content: string): Promise<string> => {
         encodeURIComponent('image.png'),
       );
       memo.upsert('counterpartUrl', sourceAttachmentId, response.url);
-      console.log(`Image Uploaded: ${response.url}`);
+      logger.debug(`Image Uploaded: ${response.url}`);
+    } else {
+      logger.debug(`Attachment already dupulicated: ${sourceAttachmentId}`);
     }
   }
 
   const contentFullyReplaced: string = contentWorkItemReplaced.replace(
     regExpAttachment,
     (_, ...p) => {
-      const sourceAttachmentId = p[3] as string;
+      logger.debug(`p[2]: ${String(p[2])}`);
+      logger.debug(`p[3]: ${String(p[3])}`);
+      const sourceAttachmentId = p[2] as string;
       const duplicatedImageUrl = memo.get('counterpartUrl', sourceAttachmentId);
       return [p[0], duplicatedImageUrl, p[4]].join('');
     },
   );
 
-  console.info(`\t${contentFullyReplaced}`);
+  logger.debug(`contentFullyReplaced:\n${contentFullyReplaced}`);
 
   return contentFullyReplaced;
 };

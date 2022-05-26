@@ -1,5 +1,8 @@
 import axios from 'axios';
+import { getLogger } from 'log4js';
 import { destinationProfile, ProjectProfile } from '../environment/profile';
+
+const logger = getLogger();
 
 export class DestinationIteration {
   private static profile = destinationProfile;
@@ -9,7 +12,7 @@ export class DestinationIteration {
   }
 
   public static addToTeam(identifier: string) {
-    console.info(`Add iteration to destination team: ${identifier}`);
+    logger.debug(`Add iteration to destination team: ${identifier}`);
     return IterationAPI.addToTeam(this.profile, identifier);
   }
 }

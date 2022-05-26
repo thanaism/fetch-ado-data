@@ -1,8 +1,11 @@
 import axios from 'axios';
+import { getLogger } from 'log4js';
 import { EnvironmentVariables } from '../environment/env';
 import { destinationProfile, ProjectProfile, sourceProfile } from '../environment/profile';
 import { User } from '../users/user';
 import { WorkItemJsonPatch } from './workItemJsonPatch';
+
+const logger = getLogger();
 
 export class SourceWorkItem {
   private static profile: ProjectProfile = sourceProfile;
@@ -69,7 +72,7 @@ export class DestinationWorkItem {
   }
 
   public static async create(type: string, body: WorkItemJsonPatch[]) {
-    console.info(`DestinationWorkItem.create: ${type}`);
+    logger.debug(`DestinationWorkItem.create: ${type}`);
     const response = await WorkItemAPI.create(this.profile, type, body);
     return response.data;
   }

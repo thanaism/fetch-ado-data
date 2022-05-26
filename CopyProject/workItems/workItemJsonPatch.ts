@@ -4,6 +4,9 @@ import { EnvironmentVariables } from '../environment/env';
 import { Memo } from '../keyValueStore/memo';
 import { destinationProfile } from '../environment/profile';
 import { WorkItem, WorkItemRelation } from './workItemAPI';
+import { getLogger } from 'log4js';
+
+const logger = getLogger();
 
 export type WorkItemJsonPatch = {
   op: string;
@@ -21,7 +24,7 @@ export type WorkItemJsonPatch = {
 };
 
 export const toJsonPatchForCreate = (sourceWorkItem: WorkItem): WorkItemJsonPatch[] => {
-  console.info(`toJsonPatchForCreate: ${sourceWorkItem.id}`);
+  logger.debug(`toJsonPatchForCreate: ${sourceWorkItem.id}`);
   const jsonPatch = [
     {
       op: 'add',
@@ -92,7 +95,7 @@ export const toJsonPatchForUpdate = async (
       : await relationsJsonPatch(sourceWorkItem.relations, destinationWorkItems)),
   ];
 
-  console.info(JSON.stringify(jsonPatch));
+  logger.debug(JSON.stringify(jsonPatch));
   return jsonPatch;
 };
 
@@ -102,7 +105,7 @@ const convertClassificationPath = (sourceClassificationPath: string) => {
   const newClassificationPath = [env.DestinationProject, env.DestinationTeam]
     .concat(sourceClassificationPathArray)
     .join('\\');
-  console.info(
+  logger.debug(
     `convertClassificationPath: ${sourceClassificationPath} -> ${newClassificationPath}`,
   );
   return newClassificationPath;
@@ -136,14 +139,14 @@ const relationsJsonPatch = async (
     ),
   );
 
-  console.info(JSON.stringify(attachmentsExistingInDestinationWorkItems));
+  logger.debug(JSON.stringify(attachmentsExistingInDestinationWorkItems));
 
   const attachments = relations.flatMap((relation) => {
     if (relation.rel !== 'AttachedFile') return [];
     const id = toId(relation.url);
     const counterpartUrl = memo.get('counterpartUrl', id) as string;
     if (attachmentsExistingInDestinationWorkItems.has(counterpartUrl.split('?')[0])) {
-      console.info(`Attachment is already added to relations...`);
+      logger.debug(`Attachment is already added to relations...`);
       return [];
     }
     return [
@@ -183,7 +186,7 @@ const relationsJsonPatch = async (
   });
 
   const combinedJsonPatch = [...attachments, ...others];
-  console.info(`Combined JsonPatch: ${combinedJsonPatch.length}`);
+  logger.debug(`Combined JsonPatch: ${combinedJsonPatch.length}`);
   return combinedJsonPatch;
 };
 

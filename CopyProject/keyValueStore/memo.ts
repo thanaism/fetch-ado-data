@@ -1,5 +1,7 @@
+import { getLogger } from 'log4js';
 import { AzureTables } from './azureTables';
 
+const logger = getLogger();
 type PartitionKey = 'previousChangedDate' | 'counterpartId' | 'counterpartUrl';
 
 export class Memo {
@@ -29,10 +31,12 @@ export class Memo {
     return this.map.has(String([partitionKey, rowKey]));
   }
   public get(partitionKey: PartitionKey, rowKey: string | number) {
+    logger.debug(`Memo.get --- ${partitionKey}, ${rowKey}`);
     return this.map.get(String([partitionKey, rowKey])).value;
   }
 
   public upsert(partitionKey: PartitionKey, rowKey: string | number, value: unknown) {
+    logger.debug(`Memo.upsert --- ${partitionKey}, ${rowKey}, ${String(value)}`);
     this.map.set(String([partitionKey, rowKey]), { value });
   }
 
